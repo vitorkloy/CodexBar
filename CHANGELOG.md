@@ -7,6 +7,7 @@
 - Codex accounts: record bounded, identity-free registry mutation diagnostics in the existing debug log to help investigate saved-account loss (#4699, #4499). Thanks @LeoLin990405!
 
 - CLI: add `codexbar config login --provider copilot` with device-code sign-in, token-free JSON events, and safe reuse of existing GitHub accounts (#4706). Thanks @DreamyTalesPAN!
+- Settings: use the native sidebar, search, toolbar, and Liquid Glass on macOS 26 and later, retaining the existing layout on older macOS versions (#4708). Thanks @elijahfriedman!
 - Soniox: show prepaid balance and monthly spend using an organization API key, with an optional monthly budget meter. (#4678) Thanks @JiehoonKwak!
 - Menu bar: show both primary and secondary user-plugin quotas in the merged meter icon, using the same thick and thin lanes as built-in providers (#4709). Thanks @soimy!
 - Linux desktop: show a readable provider initial when a bundled logo is unavailable (#4693). Thanks @SaahiilM!
