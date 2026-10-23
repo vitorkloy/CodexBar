@@ -51,6 +51,14 @@ GNOME may need a tray extension; the app's windows work without a tray.
 See the [macOS feature comparison](Integrations/Linux/MAC_COMPARISON.md) for
 supported features and remaining gaps.
 
+### Windows tray app (fork)
+
+A lightweight Windows tray app (Tauri 2 + Rust) for Codex, Claude, Cursor, Gemini,
+and Copilot lives in [`Integrations/Windows`](Integrations/Windows/README.md). It
+reuses CodexBar's `config.json` and ships as a per-user NSIS installer with no
+extra runtime. Port maintained in the [vitorkloy/CodexBar](https://github.com/vitorkloy/CodexBar)
+fork; all credit for CodexBar goes to [@steipete](https://github.com/steipete).
+
 ### CLI Tarballs (macOS/Linux)
 Homebrew formula (Linux today):
 ```bash
