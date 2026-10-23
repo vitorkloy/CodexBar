@@ -1,0 +1,14 @@
+{
+  "name": "codexbar-windows",
+  "private": true,
+  "version": "0.1.0",
+  "description": "CodexBar Windows tray app (Tauri 2)",
+  "scripts": {
+    "tauri": "tauri",
+    "build": "tauri build",
+    "dev": "tauri dev"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.5.0"
+  }
+}

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>CodexBar Settings</title>
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body class="settings">
+  <h1>CodexBar Settings</h1>
+
+  <section>
+    <h2>General</h2>
+    <label class="line">Refresh every
+      <select id="refresh">
+        <option value="2">2 minutes</option>
+        <option value="5">5 minutes</option>
+        <option value="10">10 minutes</option>
+        <option value="15">15 minutes</option>
+        <option value="30">30 minutes</option>
+        <option value="60">1 hour</option>
+        <option value="0">Manual only</option>
+      </select>
+    </label>
+    <label class="line"><input type="checkbox" id="autostart" /> Start with Windows</label>
+  </section>
+
+  <section>
+    <h2>Notifications</h2>
+    <label class="line"><input type="checkbox" id="notifications" /> Notify when a limit is getting close</label>
+    <label class="line">Warn at <input type="number" id="warn" min="1" max="100" />% and again at
+      <input type="number" id="crit" min="1" max="100" />%</label>
+  </section>
+
+  <section>
+    <h2>Providers</h2>
+    <div id="providers"></div>
+    <p class="small muted">Codex, Claude and Gemini reuse their CLI logins (<code>%USERPROFILE%\.codex</code>,
+      <code>.claude</code>, <code>.gemini</code>). Cursor reuses the Cursor app login. Browser-cookie import is planned for v2.</p>
+  </section>
+
+  <section>
+    <h2>Copilot</h2>
+    <div id="copilotState" class="small muted"></div>
+    <p><button id="copilotSignIn" class="primary">Sign in with GitHub</button>
+      <span id="copilotCode" class="code"></span></p>
+    <label class="line">Or paste a GitHub token:</label>
+    <input type="password" id="copilotToken" class="wide" placeholder="gho_… / ghu_…" />
+    <label class="line">Enterprise host (optional)
+      <input type="text" id="copilotHost" placeholder="octocorp.ghe.com" /></label>
+    <button id="copilotSave">Save token</button>
+  </section>
+
+  <section>
+    <h2>Cursor</h2>
+    <div id="cursorState" class="small muted"></div>
+    <label class="line">Manual cookie header (optional, overrides the Cursor app login):</label>
+    <input type="password" id="cursorCookie" class="wide" placeholder="WorkosCursorSessionToken=…" />
+    <p><button id="cursorSave">Save</button> <button id="cursorClear">Use Cursor app login</button></p>
+  </section>
+
+  <section>
+    <h2>Config</h2>
+    <div class="small">Shared CodexBar config: <code id="configPath"></code></div>
+    <div id="configError" class="err"></div>
+    <p><button id="openConfig">Open config folder</button></p>
+  </section>
+
+  <section>
+    <h2>About</h2>
+    <div class="small">CodexBar for Windows <span id="version"></span>. Based on
+      <a id="upstream">CodexBar</a> by Peter Steinberger (MIT License). Windows port by Vitor de Oliveira.</div>
+  </section>
+
+  <p><button id="save" class="primary">Save</button> <span id="status" class="small muted"></span></p>
+  <script src="settings.js"></script>
+</body>
+</html>
