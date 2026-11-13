@@ -3,6 +3,9 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <time.h>
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 
 struct CQJSWatchdog {
     CQJSHostCallback callback;
@@ -12,11 +15,23 @@ struct CQJSWatchdog {
 };
 
 static uint64_t CQJSMonotonicNanoseconds(void) {
+#if defined(_WIN32)
+    static LARGE_INTEGER frequency = {0};
+    LARGE_INTEGER counter;
+    if (frequency.QuadPart == 0 && !QueryPerformanceFrequency(&frequency)) {
+        return 0;
+    }
+    if (!QueryPerformanceCounter(&counter) || frequency.QuadPart == 0) {
+        return 0;
+    }
+    return (uint64_t)((counter.QuadPart * UINT64_C(1000000000)) / (uint64_t)frequency.QuadPart);
+#else
     struct timespec value;
     if (clock_gettime(CLOCK_MONOTONIC, &value) != 0) {
         return 0;
     }
     return (uint64_t)value.tv_sec * UINT64_C(1000000000) + (uint64_t)value.tv_nsec;
+#endif
 }
 
 static int CQJSInterruptHandler(JSRuntime *runtime, void *opaque) {

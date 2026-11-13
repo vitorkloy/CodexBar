@@ -4,11 +4,14 @@
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDateTime>
+#ifndef Q_OS_WIN
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusPendingCall>
+#endif
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -20,7 +23,9 @@
 #include <algorithm>
 #include <csignal>
 #include <memory>
+#ifndef Q_OS_WIN
 #include <unistd.h>
+#endif
 
 namespace {
 QJSValue module(QJSEngine &engine, const QString &path, const QString &exports) {
@@ -33,8 +38,10 @@ QJSValue module(QJSEngine &engine, const QString &path, const QString &exports) 
 }
 void stop(QProcess &process) {
     if (process.state() == QProcess::NotRunning) return;
+#ifndef Q_OS_WIN
     const auto pid = process.processId();
     if (pid > 0) ::kill(-pid, SIGKILL);
+#endif
     process.kill();
     process.waitForFinished(1000);
 }
@@ -111,7 +118,11 @@ void DesktopController::loadSettings(const QString &cliOverride) {
         {"quotaDisplay", "remaining"}, {"resetDisplay", "countdown"}, {"showPace", true},
         {"showBarDetail", false}, {"showScopedCaps", false}, {"barProviders", 2},
         {"warningColors", true}, {"trayStyle", "meters"}, {"followOmarchyTheme", false}};
+#ifdef Q_OS_WIN
+    m_configPath = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + "/codexbar/windows.json";
+#else
     m_configPath = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + "/codexbar/linux.json";
+#endif
     QFile file(m_configPath);
     QVariantMap candidate = m_settings;
     if (file.open(QIODevice::ReadOnly)) {
@@ -119,7 +130,11 @@ void DesktopController::loadSettings(const QString &cliOverride) {
         const auto document = QJsonDocument::fromJson(file.readAll(), &parse);
         if (parse.error != QJsonParseError::NoError || !document.isObject()) {
             m_configBlocked = true;
+#ifdef Q_OS_WIN
+            m_configError = "Invalid windows.json. Fix or remove it and restart CodexBar before saving.";
+#else
             m_configError = "Invalid linux.json. Fix or remove it and restart CodexBar before saving.";
+#endif
         } else {
             const auto loaded = document.object().toVariantMap();
             for (auto it = loaded.begin(); it != loaded.end(); ++it) if (candidate.contains(it.key())) candidate[it.key()] = it.value();
@@ -129,7 +144,11 @@ void DesktopController::loadSettings(const QString &cliOverride) {
     }
     if (file.exists() && !file.isOpen()) {
         m_configBlocked = true;
+#ifdef Q_OS_WIN
+        m_configError = "Cannot read windows.json. Check permissions and restart CodexBar.";
+#else
         m_configError = "Cannot read linux.json. Check permissions and restart CodexBar.";
+#endif
     }
     if (!cliOverride.isEmpty()) m_settings["executable"] = cliOverride;
 }
@@ -269,7 +288,9 @@ void DesktopController::probe(QProcess &process, const QStringList &command, boo
     connect(&process, &QProcess::errorOccurred, this, [finish](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart) finish(true);
     });
+#ifndef Q_OS_WIN
     process.setChildProcessModifier([] { ::setsid(); });
+#endif
     process.start(command.first(), command.mid(1));
     deadline->start(60000);
     emit changed();
@@ -281,6 +302,7 @@ void DesktopController::updateNotifications(const QVariantList &entries) {
     if (result.isError()) return;
     m_noticeState = result.property("state");
     if (!m_settings.value("notifications").toBool()) return;
+#ifndef Q_OS_WIN
     for (const auto &item : result.property("events").toVariant().toList()) {
         auto event = item.toMap();
         auto message = QDBusMessage::createMethodCall("org.freedesktop.Notifications", "/org/freedesktop/Notifications",
@@ -289,6 +311,7 @@ void DesktopController::updateNotifications(const QVariantList &entries) {
             event.value("message").toString(), QStringList(), QVariantMap(), 8000});
         QDBusConnection::sessionBus().asyncCall(message);
     }
+#endif
 }
 
 void DesktopController::copySummary() {
@@ -442,19 +465,52 @@ void DesktopController::loadProviders() {
         }
         if (!providers.isEmpty()) { m_providers = providers; emit settingsChanged(); }
     });
+#ifndef Q_OS_WIN
     m_catalog.setChildProcessModifier([] { ::setsid(); });
+#endif
     m_catalog.start(m_settings.value("executable").toString(), {"config", "providers", "--format", "json"});
     deadline->start(10000);
 }
 
+#ifdef Q_OS_WIN
+static QString windowsStartupShortcutPath() {
+    return QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation) +
+        "/Startup/CodexBar.bat";
+}
+#endif
+
 bool DesktopController::launchAtLogin() const {
+#ifdef Q_OS_WIN
+    return QFileInfo::exists(windowsStartupShortcutPath());
+#else
     QFile file(QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) +
         "/autostart/com.steipete.CodexBar.desktop");
     if (!file.open(QIODevice::ReadOnly)) return false;
     return !QString::fromUtf8(file.readAll()).contains(QRegularExpression("(^|\n)Hidden\\s*=\\s*true(\n|$)"));
+#endif
 }
 
 bool DesktopController::setLaunchAtLogin(bool enabled) {
+#ifdef Q_OS_WIN
+    const auto path = windowsStartupShortcutPath();
+    if (!enabled) {
+        if (QFile::exists(path) && !QFile::remove(path)) {
+            m_configError = "Cannot update login startup."; emit settingsChanged(); return false;
+        }
+        m_configError.clear(); emit settingsChanged(); return true;
+    }
+    QDir().mkpath(QFileInfo(path).absolutePath());
+    QString executable = QCoreApplication::applicationFilePath();
+    if (executable.contains('\n') || executable.contains('\r')) return false;
+    executable.replace("\"", "\"\"");
+    const auto content = QString("@echo off\r\nstart \"\" \"%1\" --background\r\n")
+        .arg(executable).toUtf8();
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly) || file.write(content) != content.size() || !file.commit()) {
+        m_configError = "Cannot update login startup."; emit settingsChanged(); return false;
+    }
+    m_configError.clear(); emit settingsChanged(); return true;
+#else
     const auto path = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) +
         "/autostart/com.steipete.CodexBar.desktop";
     QDir().mkpath(QFileInfo(path).absolutePath());
@@ -470,10 +526,26 @@ bool DesktopController::setLaunchAtLogin(bool enabled) {
         m_configError = "Cannot update login startup."; emit settingsChanged(); return false;
     }
     m_configError.clear(); emit settingsChanged(); return true;
+#endif
 }
 
 bool DesktopController::accountAction(const QString &provider, const QString &action) {
     if (!QStringList{"codex", "claude"}.contains(provider) || !QStringList{"login", "logout"}.contains(action)) return false;
+#ifdef Q_OS_WIN
+    const auto cli = QStandardPaths::findExecutable(provider);
+    if (cli.isEmpty()) {
+        m_configError = "Install the provider CLI to manage sign-in.";
+        emit settingsChanged(); return false;
+    }
+    QStringList arguments{"/k"};
+    arguments.append("\"" + cli + "\"");
+    if (provider == "claude") arguments.append("auth");
+    arguments.append(action);
+    if (!QProcess::startDetached("cmd.exe", arguments)) {
+        m_configError = "Could not open the sign-in terminal."; emit settingsChanged(); return false;
+    }
+    m_configError.clear(); emit settingsChanged(); return true;
+#else
     const auto terminal = QStandardPaths::findExecutable("xdg-terminal-exec");
     const auto cli = QStandardPaths::findExecutable(provider);
     if (terminal.isEmpty() || cli.isEmpty()) {
@@ -487,4 +559,5 @@ bool DesktopController::accountAction(const QString &provider, const QString &ac
         m_configError = "Could not open the sign-in terminal."; emit settingsChanged(); return false;
     }
     m_configError.clear(); emit settingsChanged(); return true;
+#endif
 }

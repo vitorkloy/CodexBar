@@ -4,6 +4,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 import Foundation
 
@@ -185,6 +187,8 @@ extension CodexBarCLI {
         Glibc.exit(code)
         #elseif canImport(Musl)
         Musl.exit(code)
+        #elseif os(Windows)
+        exit(code)
         #endif
     }
 }

@@ -10,6 +10,8 @@ import Foundation
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 
 // swiftlint:disable type_body_length file_length

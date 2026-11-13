@@ -1,7 +1,7 @@
 import Foundation
 
 package enum ProcessExitRelease {
-    #if os(Linux)
+    #if os(Linux) || os(Windows)
     private static let queue = DispatchQueue(label: "com.steipete.CodexBar.process-exit-release", qos: .utility)
     private static let maximumRetryDelay: TimeInterval = 2
     #endif
@@ -14,14 +14,14 @@ package enum ProcessExitRelease {
     /// a long-running `codexbar serve` hits EMFILE. `waitUntilExit()` returns immediately for an exited child, so
     /// it is deferred until then instead of spinning a run loop, and serialized because callers may ask twice.
     package static func afterExit(_ process: Process) {
-        #if os(Linux)
+        #if os(Linux) || os(Windows)
         self.queue.async {
             self.release(process, retryDelay: 0.05)
         }
         #endif
     }
 
-    #if os(Linux)
+    #if os(Linux) || os(Windows)
     private static func release(_ process: Process, retryDelay: TimeInterval) {
         guard process.isRunning else {
             process.waitUntilExit()

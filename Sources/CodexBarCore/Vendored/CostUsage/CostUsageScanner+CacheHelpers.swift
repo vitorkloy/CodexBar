@@ -3,6 +3,8 @@ import Foundation
 import Musl
 #elseif canImport(Glibc)
 import Glibc
+#elseif os(Windows)
+import CWindowsPOSIX
 #else
 import Darwin
 #endif
@@ -439,6 +441,9 @@ extension CostUsageScanner {
         #if os(Linux)
         let modifiedSeconds = Int64(info.st_mtim.tv_sec)
         let modifiedNanoseconds = Int64(info.st_mtim.tv_nsec)
+        #elseif os(Windows)
+        let modifiedSeconds = Int64(info.st_mtime)
+        let modifiedNanoseconds = Int64(0)
         #else
         let modifiedSeconds = Int64(info.st_mtimespec.tv_sec)
         let modifiedNanoseconds = Int64(info.st_mtimespec.tv_nsec)

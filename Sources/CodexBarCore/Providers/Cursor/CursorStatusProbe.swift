@@ -4,7 +4,7 @@ import FoundationNetworking
 #endif
 import SweetCookieKit
 
-#if os(macOS) || os(Linux)
+#if os(macOS) || os(Linux) || os(Windows)
 
 #if os(macOS)
 private let cursorCookieImportOrder: BrowserCookieImportOrder =
@@ -728,7 +728,7 @@ public struct CursorStatusProbe: Sendable {
     let sessionStore: CursorSessionStore
     #if os(macOS)
     let appAuthStore: any CursorAppAuthSessionProviding
-    #elseif os(Linux)
+    #elseif os(Linux) || os(Windows)
     let appAuthStores: [any CursorAppAuthSessionProviding]
     #endif
     #if os(macOS)
@@ -756,7 +756,7 @@ public struct CursorStatusProbe: Sendable {
                 await sessionStore.persistAppSession(session)
             },
             conditionalMutationCoordinator: .shared)
-        #elseif os(Linux)
+        #elseif os(Linux) || os(Windows)
         self.init(
             baseURL: baseURL,
             timeout: timeout,
@@ -789,7 +789,7 @@ public struct CursorStatusProbe: Sendable {
                 await sessionStore.persistAppSession(session)
             },
             conditionalMutationCoordinator: conditionalMutationCoordinator)
-        #elseif os(Linux)
+        #elseif os(Linux) || os(Windows)
         self.init(
             baseURL: baseURL,
             timeout: timeout,

@@ -104,8 +104,16 @@ public enum ClaudeConfigPaths {
         environment: [String: String],
         workingDirectory: URL? = nil) -> URL
     {
+        #if os(Windows)
+        if let profile = self.nonemptyLiteral(environment["USERPROFILE"]) {
+            return self.directoryURL(profile, workingDirectory: workingDirectory)
+        }
+        #endif
         if let rawHome = self.nonemptyLiteral(environment["HOME"]) {
             return self.directoryURL(rawHome, workingDirectory: workingDirectory)
+        }
+        if let profile = self.nonemptyLiteral(environment["USERPROFILE"]) {
+            return self.directoryURL(profile, workingDirectory: workingDirectory)
         }
         return FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL
     }
@@ -125,8 +133,9 @@ public enum ClaudeConfigPaths {
 
     private static func directoryURL(_ path: String, workingDirectory: URL?) -> URL {
         // `NSString.isAbsolutePath` treats `~/...` as absolute and Foundation expands it. Claude receives the
-        // environment value directly, so only a leading POSIX slash is absolute here.
-        if path.hasPrefix("/") {
+        // environment value directly, so only a leading POSIX slash is absolute here. Windows also accepts
+        // drive-letter and UNC roots.
+        if path.hasPrefix("/") || WindowsApplicationPaths.isAbsolutePath(path) {
             return URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
         }
 

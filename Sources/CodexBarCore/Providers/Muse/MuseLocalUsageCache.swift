@@ -5,6 +5,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 
 /// Per-file scan cache for Muse session logs.
@@ -94,10 +96,6 @@ struct MuseLocalUsageCache: Codable {
             #if os(Linux)
             let modified = info.st_mtim
             let changed = info.st_ctim
-            #else
-            let modified = info.st_mtimespec
-            let changed = info.st_ctimespec
-            #endif
             return Self(
                 identity: "\(info.st_dev):\(info.st_ino)",
                 size: Int64(info.st_size),
@@ -105,6 +103,25 @@ struct MuseLocalUsageCache: Codable {
                 modifiedNanoseconds: Int64(modified.tv_nsec),
                 changedSeconds: Int64(changed.tv_sec),
                 changedNanoseconds: Int64(changed.tv_nsec))
+            #elseif os(Windows)
+            return Self(
+                identity: "\(info.st_dev):\(info.st_ino)",
+                size: Int64(info.st_size),
+                modifiedSeconds: Int64(info.st_mtime),
+                modifiedNanoseconds: 0,
+                changedSeconds: Int64(info.st_ctime),
+                changedNanoseconds: 0)
+            #else
+            let modified = info.st_mtimespec
+            let changed = info.st_ctimespec
+            return Self(
+                identity: "\(info.st_dev):\(info.st_ino)",
+                size: Int64(info.st_size),
+                modifiedSeconds: Int64(modified.tv_sec),
+                modifiedNanoseconds: Int64(modified.tv_nsec),
+                changedSeconds: Int64(changed.tv_sec),
+                changedNanoseconds: Int64(changed.tv_nsec))
+            #endif
         }
     }
 

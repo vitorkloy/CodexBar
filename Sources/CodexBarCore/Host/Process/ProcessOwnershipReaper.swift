@@ -4,6 +4,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 import Foundation
 
@@ -47,8 +49,10 @@ struct ProcessOwnershipReaper: Sendable {
     private func ownedProcesses() -> [TTYProcessTreeTerminator.ProcessIdentity] {
         #if canImport(Darwin)
         let pids = DarwinProcessEnumerator.allPIDs()
-        #else
+        #elseif os(Linux)
         let pids = ((try? FileManager.default.contentsOfDirectory(atPath: "/proc")) ?? []).compactMap { pid_t($0) }
+        #else
+        let pids: [pid_t] = []
         #endif
         return pids.compactMap { pid in
             guard let identity = TTYProcessTreeTerminator.processIdentity(for: pid), self.owns(pid),
@@ -62,12 +66,15 @@ struct ProcessOwnershipReaper: Sendable {
         #if canImport(Darwin)
         guard DarwinProcessEnumerator.processInfo(pid: pid)?.pbi_uid == getuid() else { return false }
         let environment = DarwinProcessEnumerator.environment(pid: pid, names: [Self.environmentKey])
-        #else
+        return environment?[Self.environmentKey] == self.marker
+        #elseif os(Linux)
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: "/proc/\(pid)"),
               (attributes[.ownerAccountID] as? NSNumber)?.uint32Value == getuid() else { return false }
         let environment = PiProcessEnvironment.readLinuxEnvironment(pid: pid, names: [Self.environmentKey])
-        #endif
         return environment?[Self.environmentKey] == self.marker
+        #else
+        return false
+        #endif
     }
 
     /// Revalidate at each signal, including escalation: a cached PID is never authority to kill.

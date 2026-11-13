@@ -5,6 +5,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 
 private let requestReadTimeoutMilliseconds: Int32 = 5000
@@ -326,6 +328,13 @@ final class CLILocalHTTPServer: @unchecked Sendable {
     }
 
     func run(onListening: @Sendable () -> Void = {}) async throws {
+        #if os(Windows)
+        _ = onListening
+        throw NSError(
+            domain: NSPOSIXErrorDomain,
+            code: Int(ENOSYS),
+            userInfo: [NSLocalizedDescriptionKey: "codexbar serve is not supported on Windows"])
+        #else
         ignoreSIGPIPE()
 
         #if canImport(Darwin)
@@ -423,6 +432,7 @@ final class CLILocalHTTPServer: @unchecked Sendable {
                     handler: handler)
             }
         }
+        #endif
     }
 
     private var isStopRequested: Bool {
@@ -442,6 +452,10 @@ final class CLILocalHTTPServer: @unchecked Sendable {
     }
 
     private static func resolvedPort(of fd: Int32) -> UInt16? {
+        #if os(Windows)
+        _ = fd
+        return nil
+        #else
         var address = sockaddr_in()
         var length = socklen_t(MemoryLayout<sockaddr_in>.size)
         let result = withUnsafeMutablePointer(to: &address) { pointer in
@@ -451,6 +465,7 @@ final class CLILocalHTTPServer: @unchecked Sendable {
         }
         guard result == 0 else { return nil }
         return UInt16(bigEndian: address.sin_port)
+        #endif
     }
 
     private func releaseListeningFD(_ fd: Int32) -> Bool {
@@ -462,6 +477,7 @@ final class CLILocalHTTPServer: @unchecked Sendable {
     }
 }
 
+#if !os(Windows)
 private func handleClient(
     _ clientFD: Int32,
     allowedHosts: CLILocalHTTPAllowedHosts,
@@ -591,3 +607,4 @@ private func closeSocket(_ fd: Int32) {
     Musl.close(fd)
     #endif
 }
+#endif

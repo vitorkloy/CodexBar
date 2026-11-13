@@ -3,6 +3,8 @@ import Foundation
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 
 package final class ProcessPipeCapture: @unchecked Sendable {

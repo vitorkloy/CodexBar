@@ -6,6 +6,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 
 /// Reads Muse token usage from the durable session logs the CLI writes locally.

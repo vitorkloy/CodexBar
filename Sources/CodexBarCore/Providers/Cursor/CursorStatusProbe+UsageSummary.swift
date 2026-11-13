@@ -1,6 +1,6 @@
 import Foundation
 
-#if os(macOS) || os(Linux)
+#if os(macOS) || os(Linux) || os(Windows)
 extension CursorStatusProbe {
     func parseUsageSummary(
         _ summary: CursorUsageSummary,

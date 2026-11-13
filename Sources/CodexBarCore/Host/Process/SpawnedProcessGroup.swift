@@ -4,6 +4,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 import Foundation
 
@@ -245,9 +247,11 @@ package final class SpawnedProcessGroup: @unchecked Sendable {
     private static func allProcessIDs() -> [pid_t] {
         #if canImport(Darwin)
         return DarwinProcessEnumerator.allPIDs()
-        #else
+        #elseif os(Linux)
         guard let entries = try? FileManager.default.contentsOfDirectory(atPath: "/proc") else { return [] }
         return entries.compactMap(pid_t.init)
+        #else
+        return []
         #endif
     }
 
@@ -274,18 +278,21 @@ package final class SpawnedProcessGroup: @unchecked Sendable {
     private let outputTTYs: Set<OutputTTYIdentity>
     private let rootIdentity: TTYProcessTreeTerminator.ProcessIdentity?
     private let reservedPTYPrimaryDescriptor: OwnedFileDescriptorState?
+    private let launchedProcess: Process?
 
     private init(
         pid: pid_t,
         outputPipes: Set<OutputPipeIdentity>,
         outputTTYs: Set<OutputTTYIdentity> = [],
-        reservedPTYPrimaryDescriptor: OwnedFileDescriptorState? = nil)
+        reservedPTYPrimaryDescriptor: OwnedFileDescriptorState? = nil,
+        launchedProcess: Process? = nil)
     {
         self.pid = pid
         self.processGroup = pid
         self.outputPipes = outputPipes
         self.outputTTYs = outputTTYs
         self.reservedPTYPrimaryDescriptor = reservedPTYPrimaryDescriptor
+        self.launchedProcess = launchedProcess
         self.rootIdentity = TTYProcessTreeTerminator.processIdentity(for: pid)
         self.startWaiter()
     }
@@ -305,6 +312,24 @@ package final class SpawnedProcessGroup: @unchecked Sendable {
         stdoutPipe: Pipe,
         stderrPipe: Pipe) throws -> SpawnedProcessGroup
     {
+        #if os(Windows)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: binary)
+        process.arguments = arguments
+        process.environment = environment
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+        process.standardInput = FileHandle.nullDevice
+        do {
+            try process.run()
+        } catch {
+            throw LaunchError.spawnFailed(error.localizedDescription)
+        }
+        return SpawnedProcessGroup(
+            pid: pid_t(process.processIdentifier),
+            outputPipes: [],
+            launchedProcess: process)
+        #else
         #if canImport(Darwin)
         var fileActions: posix_spawn_file_actions_t?
         #else
@@ -397,6 +422,7 @@ package final class SpawnedProcessGroup: @unchecked Sendable {
             throw LaunchError.spawnFailed(String(cString: strerror(spawnResult)))
         }
         return SpawnedProcessGroup(pid: pid, outputPipes: outputPipes)
+        #endif
     }
 
     package static func launchPTY(
@@ -679,7 +705,9 @@ package final class SpawnedProcessGroup: @unchecked Sendable {
         let processGroup = self.processGroup
         let observedProcessGroupMembers = self.observedProcessGroupMembers
         let termination = self.termination
+        let launchedProcess = self.launchedProcess
         DispatchQueue.global(qos: .userInitiated).async {
+            defer { _ = launchedProcess }
             var info = siginfo_t()
             var waitResult: Int32
             repeat {

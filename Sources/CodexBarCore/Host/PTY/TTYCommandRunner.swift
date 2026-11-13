@@ -4,6 +4,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 import Foundation
 
@@ -1104,7 +1106,7 @@ extension TTYCommandRunner {
         _ tool: String,
         environment: [String: String] = ProcessInfo.processInfo.environment) -> String?
     {
-        if tool.contains("/") {
+        if tool.contains("/") || tool.contains("\\") || WindowsApplicationPaths.isAbsolutePath(tool) {
             return BinaryLocator.find(tool, in: [], fileManager: .default)
         }
         if let cli = ProviderDescriptorRegistry.all.first(where: { $0.cli.name == tool })?.cli,
@@ -1119,7 +1121,10 @@ extension TTYCommandRunner {
             purposes: [.tty, .nodeTooling],
             env: environment,
             loginPATH: loginPATH)
-        return BinaryLocator.find(tool, in: path.split(separator: ":").map(String.init), fileManager: .default)
+        return BinaryLocator.find(
+            tool,
+            in: path.split(separator: WindowsApplicationPaths.environmentPathSeparator).map(String.init),
+            fileManager: .default)
     }
 
     private static func providerTTYLaunch(

@@ -12,11 +12,15 @@ let sweetCookieKitDependency: Package.Dependency =
 
 let sqlite3LibDir = ProcessInfo.processInfo.environment["CODEXBAR_SQLITE3_LIB_DIR"]?
     .trimmingCharacters(in: .whitespacesAndNewlines)
-let sqlite3LinkerSettings: [LinkerSetting] = if let sqlite3LibDir, !sqlite3LibDir.isEmpty {
-    [.unsafeFlags(["-L\(sqlite3LibDir)"], .when(platforms: [.linux]))]
-} else {
-    []
-}
+let sqlite3LinkerSettings: [LinkerSetting] = {
+    var settings: [LinkerSetting] = [
+        .linkedLibrary("sqlite3", .when(platforms: [.windows])),
+    ]
+    if let sqlite3LibDir, !sqlite3LibDir.isEmpty {
+        settings.append(.unsafeFlags(["-L\(sqlite3LibDir)"], .when(platforms: [.linux])))
+    }
+    return settings
+}()
 
 let package = Package(
     name: "CodexBar",
@@ -60,11 +64,22 @@ let package = Package(
                 exclude: ["README.md", "LICENSE"],
                 publicHeadersPath: "include",
                 cSettings: [
-                    .define("_GNU_SOURCE"),
+                    .define("_GNU_SOURCE", .when(platforms: [.linux, .macOS])),
+                    .define("_CRT_SECURE_NO_WARNINGS", .when(platforms: [.windows])),
+                    .define("WIN32_LEAN_AND_MEAN", .when(platforms: [.windows])),
                 ],
                 linkerSettings: [
                     .linkedLibrary("m", .when(platforms: [.linux])),
                 ]),
+            .target(
+                name: "CWindowsPOSIX",
+                path: "Sources/CWindowsPOSIX",
+                publicHeadersPath: "include",
+                cSettings: [
+                    .define("_CRT_SECURE_NO_WARNINGS"),
+                    .define("WIN32_LEAN_AND_MEAN"),
+                ],
+                linkerSettings: []),
             // Both glibc and static-musl CLI builds use this target; the module map supplies sqlite3 linkage.
             .systemLibrary(
                 name: "CSQLite3",
@@ -76,7 +91,8 @@ let package = Package(
                 name: "CodexBarCore",
                 dependencies: [
                     "CQuickJS",
-                    .target(name: "CSQLite3", condition: .when(platforms: [.linux])),
+                    .target(name: "CSQLite3", condition: .when(platforms: [.linux, .windows])),
+                    .target(name: "CWindowsPOSIX", condition: .when(platforms: [.windows])),
                     .product(name: "Crypto", package: "swift-crypto"),
                     .product(name: "Logging", package: "swift-log"),
                     .product(name: "SweetCookieKit", package: "SweetCookieKit"),
@@ -94,6 +110,7 @@ let package = Package(
                 name: "CodexBarCLI",
                 dependencies: [
                     "CodexBarCore",
+                    .target(name: "CWindowsPOSIX", condition: .when(platforms: [.windows])),
                     .product(name: "Commander", package: "Commander"),
                     .product(name: "Crypto", package: "swift-crypto"),
                 ],

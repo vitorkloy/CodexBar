@@ -3,7 +3,7 @@ import Foundation
 import FoundationNetworking
 #endif
 
-#if os(macOS) || os(Linux)
+#if os(macOS) || os(Linux) || os(Windows)
 extension CursorStatusProbe {
     /// Fetch Cursor usage using a first-party web session derived from Cursor.app's access token.
     func fetchWithAppAuthSession(_ session: CursorAppAuthSession) async throws -> CursorStatusSnapshot {
@@ -14,7 +14,7 @@ extension CursorStatusProbe {
 }
 #endif
 
-#if os(Linux)
+#if os(Linux) || os(Windows)
 extension CursorStatusProbe {
     private static let httpClient = Self.makeHTTPClient()
 

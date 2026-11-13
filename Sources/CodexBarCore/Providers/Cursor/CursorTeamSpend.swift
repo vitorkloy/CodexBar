@@ -3,7 +3,7 @@ import Foundation
 import FoundationNetworking
 #endif
 
-#if os(macOS) || os(Linux)
+#if os(macOS) || os(Linux) || os(Windows)
 struct CursorTeamSpend: Decodable, Sendable {
     struct Member: Decodable, Sendable {
         let email: String?

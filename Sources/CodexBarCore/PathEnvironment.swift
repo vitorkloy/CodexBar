@@ -5,6 +5,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 #if os(macOS)
 import Security
@@ -108,6 +110,18 @@ public enum BinaryLocator {
     /// self-updating location (`~/.claude/local`), the legacy per-user installer
     /// (`~/.claude/bin`), Homebrew, and the macOS Terminal installer (cmux.app).
     static func claudeWellKnownPaths(home: String) -> [String] {
+        #if os(Windows)
+        let roaming = WindowsApplicationPaths.roamingAppData(home: home)
+        let local = WindowsApplicationPaths.localAppData(home: home)
+        return [
+            "\(home)/.local/bin/claude.exe",
+            "\(home)/.claude/local/claude.exe",
+            "\(home)/.claude/bin/claude.exe",
+            "\(roaming)/npm/claude.cmd",
+            "\(roaming)/npm/claude.exe",
+            "\(local)/Programs/claude/claude.exe",
+        ]
+        #else
         [
             "\(home)/.local/bin/claude",
             "\(home)/.claude/local/claude",
@@ -116,6 +130,7 @@ public enum BinaryLocator {
             "/usr/local/bin/claude",
             "/Applications/cmux.app/Contents/Resources/bin/claude",
         ]
+        #endif
     }
 
     public static func resolveAntigravityBinary(
@@ -189,6 +204,15 @@ public enum BinaryLocator {
             "/Applications/ChatGPT.app/Contents/Resources/codex",
             "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
             "/Applications/Codex.app/Contents/Resources/codex",
+        ]
+        #elseif os(Windows)
+        let roaming = WindowsApplicationPaths.roamingAppData(home: home)
+        let local = WindowsApplicationPaths.localAppData(home: home)
+        return [
+            "\(home)/.local/bin/codex.exe",
+            "\(roaming)/npm/codex.cmd",
+            "\(roaming)/npm/codex.exe",
+            "\(local)/Programs/codex/codex.exe",
         ]
         #else
         []
@@ -396,7 +420,7 @@ public enum BinaryLocator {
         if let existingPATH = env["PATH"],
            let pathHit = self.find(
                name,
-               in: existingPATH.split(separator: ":").map(String.init),
+               in: existingPATH.split(separator: WindowsApplicationPaths.environmentPathSeparator).map(String.init),
                fileManager: fileManager,
                launchCandidateFilter: launchCandidateFilter)
         {
@@ -411,6 +435,7 @@ public enum BinaryLocator {
             return candidate
         }
 
+        #if !os(Windows)
         // 5) Interactive login shell lookup (captures nvm/fnm/mise paths from .zshrc/.bashrc)
         if let shellHit = commandV(name, env["SHELL"], 2.0, fileManager),
            fileManager.isExecutableFile(atPath: shellHit),
@@ -434,6 +459,11 @@ public enum BinaryLocator {
             in: ["/usr/bin", "/bin", "/usr/sbin", "/sbin"],
             fileManager: fileManager,
             launchCandidateFilter: launchCandidateFilter)
+        #else
+        _ = commandV
+        _ = aliasResolver
+        return nil
+        #endif
     }
 
     static func find(
@@ -449,9 +479,12 @@ public enum BinaryLocator {
         }
         guard !binary.isEmpty else { return nil }
         for path in PathBuilder.searchDirectories(paths) {
-            let candidate = "\(path.hasSuffix("/") ? String(path.dropLast()) : path)/\(binary)"
-            if fileManager.isExecutableFile(atPath: candidate), launchCandidateFilter(candidate, fileManager) {
-                return candidate
+            let directory = path.hasSuffix("/") || path.hasSuffix("\\") ? String(path.dropLast()) : path
+            for filename in WindowsApplicationPaths.executableCandidates(named: binary) {
+                let candidate = "\(directory)/\(filename)"
+                if fileManager.isExecutableFile(atPath: candidate), launchCandidateFilter(candidate, fileManager) {
+                    return candidate
+                }
             }
         }
         return nil
@@ -1119,7 +1152,7 @@ public enum ShellCommandLocator {
 public enum PathBuilder {
     /// Relative and empty PATH entries depend on an untrusted invocation directory.
     static func searchDirectories(_ paths: [String]) -> [String] {
-        paths.filter { $0.hasPrefix("/") }
+        paths.filter { WindowsApplicationPaths.isAbsolutePath($0) }
     }
 
     public static func effectivePATH(
@@ -1135,16 +1168,25 @@ public enum PathBuilder {
         }
 
         if let existing = env["PATH"], !existing.isEmpty {
-            parts.append(contentsOf: existing.split(separator: ":").map(String.init))
+            parts.append(contentsOf: existing.split(separator: WindowsApplicationPaths.environmentPathSeparator)
+                .map(String.init))
         }
 
         parts = self.searchDirectories(parts)
         if parts.isEmpty {
+            #if os(Windows)
+            parts.append(contentsOf: [
+                #"C:\Windows\System32"#,
+                #"C:\Windows"#,
+            ])
+            #else
             parts.append(contentsOf: ["/usr/bin", "/bin", "/usr/sbin", "/sbin"])
+            #endif
         }
 
         var seen = Set<String>()
-        return parts.filter { seen.insert($0).inserted }.joined(separator: ":")
+        return parts.filter { seen.insert($0).inserted }
+            .joined(separator: String(WindowsApplicationPaths.environmentPathSeparator))
     }
 
     public static func debugSnapshot(
@@ -1161,7 +1203,7 @@ public enum PathBuilder {
         let codex = BinaryLocator.resolveCodexBinary(env: env, loginPATH: login, home: home)
         let claude = BinaryLocator.resolveClaudeBinary(env: env, loginPATH: login, home: home)
         let gemini = BinaryLocator.resolveGeminiBinary(env: env, loginPATH: login, home: home)
-        let loginString = login?.joined(separator: ":")
+        let loginString = login?.joined(separator: String(WindowsApplicationPaths.environmentPathSeparator))
         return PathDebugSnapshot(
             codexBinary: codex,
             claudeBinary: claude,
@@ -1215,7 +1257,7 @@ enum LoginShellPathCapturer {
 
         let value = extracted.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return nil }
-        return value.split(separator: ":").map(String.init)
+        return value.split(separator: WindowsApplicationPaths.environmentPathSeparator).map(String.init)
     }
 }
 

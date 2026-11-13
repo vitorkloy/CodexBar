@@ -9,7 +9,7 @@ import CSQLite3
 import FoundationNetworking
 #endif
 
-#if os(macOS) || os(Linux)
+#if os(macOS) || os(Linux) || os(Windows)
 struct CursorSessionIdentity: Equatable, Sendable {
     let subject: String?
     let email: String?
@@ -105,7 +105,7 @@ struct CursorSessionIdentity: Equatable, Sendable {
 }
 #endif
 
-#if os(macOS) || os(Linux)
+#if os(macOS) || os(Linux) || os(Windows)
 struct CursorAppAuthSession: Equatable, Sendable {
     static let persistedCookieMarker = "CodexBar Cursor.app local auth"
 
@@ -220,6 +220,9 @@ struct CursorAppAuthStore: CursorAppAuthSessionProviding {
         return "\(home ?? NSHomeDirectory())/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
         #elseif os(Linux)
         return "\(self.linuxConfigHome(home: home, environment: environment))/Cursor/User/globalStorage/state.vscdb"
+        #elseif os(Windows)
+        _ = fileManager
+        return WindowsApplicationPaths.cursorUserDatabase(home: home, environment: environment)
         #else
         _ = home
         _ = environment
@@ -371,7 +374,7 @@ struct CursorAppAuthStore: CursorAppAuthSessionProviding {
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 #endif
 
-#if os(Linux)
+#if os(Linux) || os(Windows)
 /// The session `cursor-agent login` keeps in `cursor/auth.json` under the config home, for machines with the
 /// Cursor CLI and no Cursor.app. Read-only, like the app database: CodexBar never refreshes or writes it.
 struct CursorAgentAuthStore: CursorAppAuthSessionProviding {
@@ -385,7 +388,11 @@ struct CursorAgentAuthStore: CursorAppAuthSessionProviding {
         home: String? = nil,
         environment: [String: String] = ProcessInfo.processInfo.environment) -> String
     {
+        #if os(Windows)
+        WindowsApplicationPaths.cursorAgentAuth(home: home, environment: environment)
+        #else
         "\(CursorAppAuthStore.linuxConfigHome(home: home, environment: environment))/cursor/auth.json"
+        #endif
     }
 
     func loadSession() throws -> CursorAppAuthSession? {

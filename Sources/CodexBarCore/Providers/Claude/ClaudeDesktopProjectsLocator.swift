@@ -35,10 +35,17 @@ public enum ClaudeDesktopProjectsLocator {
         budget: inout DirectoryMetadataScanBudget,
         includeAuditFiles: Bool = false) -> [URL]
     {
+        #if os(Windows)
+        let claudeApplicationSupport = URL(
+            fileURLWithPath: WindowsApplicationPaths.roamingAppData(home: homeDirectory.path),
+            isDirectory: true)
+            .appendingPathComponent("Claude", isDirectory: true)
+        #else
         let claudeApplicationSupport = homeDirectory
             .appendingPathComponent("Library", isDirectory: true)
             .appendingPathComponent("Application Support", isDirectory: true)
             .appendingPathComponent("Claude", isDirectory: true)
+        #endif
         let sessionRoots = self.sessionDirectoryNames.map {
             claudeApplicationSupport.appendingPathComponent($0, isDirectory: true)
         }

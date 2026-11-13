@@ -6,6 +6,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 
 public enum CodexOAuthCredentialSource: String, Equatable, Sendable {

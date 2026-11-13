@@ -3,7 +3,7 @@ import Foundation
 import FoundationNetworking
 #endif
 
-#if os(macOS) || os(Linux)
+#if os(macOS) || os(Linux) || os(Windows)
 extension CursorStatusProbe {
     private struct CachedSessionFetchContext<Value: Sendable> {
         let cookieHeaderOverride: String?
@@ -56,7 +56,7 @@ extension CursorStatusProbe {
             coordinator: self.conditionalMutationCoordinator)
         let cachedEntry = allowCachedSessions ? CookieHeaderCache.load(provider: .cursor) : nil
         var storedCookies = allowCachedSessions ? await self.sessionStore.getCookies() : []
-        #if os(macOS) || os(Linux)
+        #if os(macOS) || os(Linux) || os(Windows)
         if !allowAppAuthFallback {
             storedCookies.removeAll(where: CursorAppAuthSession.isPersistedCookie)
         }
@@ -176,7 +176,7 @@ extension CursorStatusProbe {
         {
             return value
         }
-        #if os(Linux)
+        #if os(Linux) || os(Windows)
         if allowAppAuthFallback {
             return try await self.fetchLinuxAppSession(log: log, perform: perform)
         }

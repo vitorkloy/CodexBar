@@ -1,0 +1,109 @@
+name: Windows tray
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+env:
+  SWIFT_VERSION: 6.3.3
+  SQLITE_AMALGAMATION_VERSION: "3530400"
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      - name: Install Swift ${{ env.SWIFT_VERSION }}
+        uses: tryswift/setup-swift@ce5fe39afee72fd792fabab6db8ec3005962daf7 # v1.2.0
+        with:
+          swift-version: ${{ env.SWIFT_VERSION }}
+          windows-minimal: true
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
+        with:
+          version: "6.7.3"
+          host: windows
+          target: desktop
+          arch: win64_msvc2019_64
+          cache: true
+          archives: qtbase qtdeclarative qtsvg qttools
+
+      - name: Build SQLite for SwiftPM
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $sqliteZip = Join-Path $env:RUNNER_TEMP "sqlite-amalgamation-$env:SQLITE_AMALGAMATION_VERSION.zip"
+          $sqliteSrc = Join-Path $env:RUNNER_TEMP "sqlite-src"
+          $sqliteOut = Join-Path $env:RUNNER_TEMP "sqlite-windows"
+          Invoke-WebRequest -UseBasicParsing `
+            "https://www.sqlite.org/2026/sqlite-amalgamation-$env:SQLITE_AMALGAMATION_VERSION.zip" `
+            -OutFile $sqliteZip
+          New-Item -ItemType Directory -Force -Path $sqliteSrc, "$sqliteOut\include", "$sqliteOut\lib" | Out-Null
+          Expand-Archive -Force $sqliteZip $sqliteSrc
+          $amalgamation = Get-ChildItem $sqliteSrc -Directory | Select-Object -First 1
+          Copy-Item "$($amalgamation.FullName)\sqlite3.h" "$sqliteOut\include\sqlite3.h"
+          Push-Location $amalgamation.FullName
+          cl /nologo /O2 /c sqlite3.c /Fo"$sqliteOut\lib\sqlite3.obj"
+          lib /nologo /OUT:"$sqliteOut\lib\sqlite3.lib" "$sqliteOut\lib\sqlite3.obj"
+          Pop-Location
+          Copy-Item "$sqliteOut\include\sqlite3.h" "Sources/CSQLite3/sqlite3.h"
+          "INCLUDE=$sqliteOut\include;$env:INCLUDE" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          "LIB=$sqliteOut\lib;$env:LIB" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          "CPATH=$sqliteOut\include;$env:CPATH" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          "LIBRARY_PATH=$sqliteOut\lib;$env:LIBRARY_PATH" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          "SQLITE_DIR=$sqliteOut" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+
+      - name: Build CodexBarCLI (release)
+        shell: pwsh
+        run: |
+          swift --version
+          $swiftArgs = @(
+            "-c", "release",
+            "--product", "CodexBarCLI",
+            "-Xcc", "-I$env:SQLITE_DIR\include",
+            "-Xlinker", "/LIBPATH:$env:SQLITE_DIR\lib"
+          )
+          swift build @swiftArgs
+          $bin = swift build @swiftArgs --show-bin-path
+          & "$bin\CodexBarCLI.exe" --help | Out-Null
+          & "$bin\CodexBarCLI.exe" --version
+          "CLI_BIN=$bin" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+
+      - name: Build Windows tray
+        shell: pwsh
+        env:
+          CODEXBAR_DESKTOP_VERSION: 0.0.0-ci
+        run: |
+          New-Item -ItemType Directory -Force -Path .local\windows-build | Out-Null
+          Push-Location .local\windows-build
+          qmake CONFIG+=release ..\..\Integrations\Linux\codexbar-linux.pro
+          nmake
+          $exe = Get-ChildItem -Recurse -Filter codexbar-windows.exe | Select-Object -First 1
+          if (-not $exe) { throw "codexbar-windows.exe was not built" }
+          windeployqt --release --qmldir ..\..\Integrations\Linux\qml $exe.FullName
+          & $exe.FullName --version
+          "DESKTOP_EXE=$($exe.FullName)" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          "DEPLOY_DIR=$($exe.DirectoryName)" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+          Pop-Location
+
+      - name: Package zip
+        id: package
+        shell: pwsh
+        run: |
+          $cli = Join-Path $env:CLI_BIN "CodexBarCLI.exe"
+          $bundle = Get-ChildItem $env:CLI_BIN -Directory -Filter "CodexBar_*.bundle" | Select-Object -First 1
+          $bundleArg = @()
+          if ($bundle) { $bundleArg = @("--bundle", $bundle.FullName) }
+          $archive = python Integrations\Windows\package.py --version 0.0.0-ci --cli $cli --desktop $env:DESKTOP_EXE --deploy-dir $env:DEPLOY_DIR @bundleArg
+          "archive=$archive" | Out-File -Append -FilePath $env:GITHUB_OUTPUT -Encoding utf8
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-windows-x64
+          if-no-files-found: error
+          path: ${{ steps.package.outputs.archive }}

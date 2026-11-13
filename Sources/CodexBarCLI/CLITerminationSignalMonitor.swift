@@ -7,12 +7,18 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 
 private func handleCLITerminationSignal(_: Int32) {}
 
 final class CLITerminationSignalMonitor: @unchecked Sendable {
+    #if os(Windows)
+    static let signalNumbers = [SIGINT, SIGTERM]
+    #else
     static let signalNumbers = [SIGINT, SIGTERM, SIGHUP]
+    #endif
 
     private let lock = NSLock()
     private let sources: [DispatchSourceSignal]
@@ -64,6 +70,8 @@ final class CLITerminationSignalMonitor: @unchecked Sendable {
         _ = Glibc.signal(signalNumber, handleCLITerminationSignal)
         #elseif canImport(Musl)
         _ = Musl.signal(signalNumber, handleCLITerminationSignal)
+        #else
+        _ = signal(signalNumber, handleCLITerminationSignal)
         #endif
     }
 
@@ -74,6 +82,8 @@ final class CLITerminationSignalMonitor: @unchecked Sendable {
         _ = Glibc.signal(signalNumber, SIG_DFL)
         #elseif canImport(Musl)
         _ = Musl.signal(signalNumber, SIG_DFL)
+        #else
+        _ = signal(signalNumber, SIG_DFL)
         #endif
     }
 }

@@ -10,6 +10,7 @@
 #include <QFileInfo>
 #include <QIcon>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QLocalSocket>
 #include <QLockFile>
 #include <QMenu>
@@ -20,9 +21,12 @@
 #include <QQuickStyle>
 #include <QStandardPaths>
 #include <QSystemTrayIcon>
+#include <QThread>
 #include <cstdio>
 #include <memory>
+#ifndef Q_OS_WIN
 #include <unistd.h>
+#endif
 
 static QByteArray request(const QString &socketPath, const QJsonObject &message) {
     QLocalSocket socket;
@@ -46,10 +50,18 @@ static QByteArray request(const QString &socketPath, const QJsonObject &message)
 int main(int argc, char **argv) {
     // IPC clients do not load a GUI platform plugin or instantiate a second backend.
     auto application = std::make_unique<QCoreApplication>(argc, argv);
+#ifdef Q_OS_WIN
+    QCoreApplication::setApplicationName("codexbar-windows");
+#else
     QCoreApplication::setApplicationName("codexbar-linux");
+#endif
     QCoreApplication::setApplicationVersion(QStringLiteral(CODEXBAR_DESKTOP_VERSION));
     QCommandLineParser parser;
+#ifdef Q_OS_WIN
+    parser.setApplicationDescription("CodexBar desktop for Windows · Qt windows and system tray");
+#else
     parser.setApplicationDescription("CodexBar desktop for Linux · Qt windows and optional tray");
+#endif
     parser.addHelpOption(); parser.addVersionOption();
     for (const auto &name : {"snapshot", "refresh", "settings", "spending", "usage", "quick-view", "quit", "background", "no-tray"})
         parser.addOption(QCommandLineOption(name, QString("%1 the running desktop app").arg(name)));
@@ -76,11 +88,19 @@ int main(int argc, char **argv) {
         message["settings"] = document.object();
     }
     QString runtime = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+#ifdef Q_OS_WIN
+    if (runtime.isEmpty()) runtime = QDir::tempPath() + "/codexbar";
+    runtime += "/codexbar-windows";
+    if (!QDir().mkpath(runtime) || QFileInfo(runtime).isSymLink()) {
+        std::fputs("Cannot create a private runtime directory\n", stderr); return 1;
+    }
+#else
     if (runtime.isEmpty()) runtime = QDir::tempPath() + "/codexbar-" + QString::number(getuid());
     runtime += "/codexbar-linux";
     if (!QDir().mkpath(runtime) || QFileInfo(runtime).ownerId() != getuid() || QFileInfo(runtime).isSymLink()) {
         std::fputs("Cannot create a private runtime directory\n", stderr); return 1;
     }
+#endif
     QFile::setPermissions(runtime, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
     const auto socketPath = runtime + "/desktop.sock";
     auto reply = request(socketPath, message);
@@ -93,14 +113,18 @@ int main(int argc, char **argv) {
     if (!lock.tryLock(0)) {
         // Another launch may still be loading QML. Never remove its live socket.
         for (int attempt = 0; attempt < 10 && reply.isEmpty(); ++attempt) {
-            usleep(100000); reply = request(socketPath, message);
+            QThread::msleep(100); reply = request(socketPath, message);
         }
         if (reply.isEmpty()) { std::fputs("CodexBar is already starting; retry shortly\n", stderr); return 1; }
         return 0;
     }
     application.reset();
     QApplication app(argc, argv);
+#ifdef Q_OS_WIN
+    app.setApplicationName("codexbar-windows");
+#else
     app.setApplicationName("codexbar-linux");
+#endif
     app.setApplicationDisplayName("CodexBar");
     app.setDesktopFileName("com.steipete.CodexBar");
     app.setQuitOnLastWindowClosed(false);

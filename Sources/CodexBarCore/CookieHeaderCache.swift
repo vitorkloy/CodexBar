@@ -8,6 +8,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 
 public enum CookieAuthenticationFailurePolicy: String, Codable, Equatable, Sendable {

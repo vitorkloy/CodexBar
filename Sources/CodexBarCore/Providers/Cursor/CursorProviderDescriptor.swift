@@ -110,7 +110,7 @@ public enum CursorProviderDescriptor {
                 versionDetector: nil,
                 supportsCostCommand: self.supportsCostCommand,
                 browserSupportExemption: { sourceMode, _, settings in
-                    #if os(Linux)
+                    #if os(Linux) || os(Windows)
                     guard settings?.cursor?.cookieSource != .off else { return false }
                     if settings?.cursor?.cookieSource == .manual {
                         return CookieHeaderNormalizer.normalize(settings?.cursor?.manualCookieHeader) != nil

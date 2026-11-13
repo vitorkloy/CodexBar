@@ -7,6 +7,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 
 extension ClaudeOAuthCredentialsStore {

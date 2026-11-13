@@ -45,3 +45,6 @@ docs/.astro/
 # Swift Package Manager metadata (leave sources tracked)
 # Packages/
 # Package.resolved
+
+# Windows CI copies the SQLite amalgamation header next to the system-library shim.
+Sources/CSQLite3/sqlite3.h

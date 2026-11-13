@@ -367,7 +367,7 @@ public enum ClaudeProviderDescriptor {
     }
 
     private static func makePlanningInput(context: ProviderFetchContext) -> ClaudeSourcePlanningInput {
-        #if os(Linux)
+        #if os(Linux) || os(Windows)
         let shouldAttemptOAuth = context.sourceMode == .auto ||
             (context.runtime == .app && context.sourceMode == .oauth)
         #else
@@ -792,7 +792,7 @@ struct ClaudeOAuthFetchStrategy: ProviderFetchStrategy {
         }
         // In Auto mode, fall back to the next strategy (cli/web) when safe credentials are absent or OAuth fails.
         // Cancellation itself is always terminal.
-        #if os(Linux)
+        #if os(Linux) || os(Windows)
         return context.sourceMode == .auto
         #else
         return context.runtime == .app && context.sourceMode == .auto

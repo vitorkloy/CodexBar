@@ -5,6 +5,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 
 public enum CodexBarConfigStoreError: LocalizedError {
@@ -136,6 +138,19 @@ public struct CodexBarConfigStore: @unchecked Sendable {
             return URL(fileURLWithPath: expanded)
         }
 
+        #if os(Windows)
+        let roaming = WindowsApplicationPaths.configFileURL(home: home, environment: environment)
+        let legacyWindows = home
+            .appendingPathComponent(".codexbar", isDirectory: true)
+            .appendingPathComponent("config.json")
+        if fileManager.fileExists(atPath: roaming.path) {
+            return roaming
+        }
+        if fileManager.fileExists(atPath: legacyWindows.path) {
+            return legacyWindows
+        }
+        return roaming
+        #else
         if let xdgConfigHome = environment[xdgConfigHomeEnvironmentKey]?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !xdgConfigHome.isEmpty
@@ -164,5 +179,6 @@ public struct CodexBarConfigStore: @unchecked Sendable {
         }
 
         return xdgDefault
+        #endif
     }
 }

@@ -9,6 +9,8 @@ import Darwin
 import Glibc
 #elseif canImport(Musl)
 import Musl
+#elseif os(Windows)
+import ucrt
 #endif
 import Foundation
 #if canImport(FoundationNetworking)
@@ -25,6 +27,8 @@ enum CodexBarCLI {
             Glibc.exit(CodexBarCoreResourceSmoke.run())
             #elseif canImport(Musl)
             Musl.exit(CodexBarCoreResourceSmoke.run())
+            #elseif os(Windows)
+            ucrt.exit(CodexBarCoreResourceSmoke.run())
             #endif
         }
         self.configureLinuxTimeZoneIfNeeded()

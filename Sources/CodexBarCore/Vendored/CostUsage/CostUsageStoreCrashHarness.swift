@@ -4,6 +4,8 @@ import Foundation
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif os(Windows)
+import CWindowsPOSIX
 #endif
 
 /// Crash-safety harness for the SQLite cost store. The `CodexBarCostStoreCrashProbe`
